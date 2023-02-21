@@ -36,6 +36,10 @@
             left: 20px;
             background-color: white;
             padding: 10px;
+            z-index: 1;
+            max-width: 300px;
+            max-height: 200px;
+            overflow: auto;
         }
     </style>
 </head>
@@ -160,6 +164,10 @@
                 map.setPaintProperty('states-fills', 'fill-color',
                     ['match', ['get', 'POA_NAME21'], [...mainData.selectedState], "red", "#000000"]
                 )
+
+                //print selected pins 
+                const selectedPins = mainData.pins.filter(d => mainData.selectedState.has(d.properties.postcode))
+                infoDiv.innerHTML = selectedPins.map(d => `id:${d.properties.id},postcode:${d.properties.postcode} `).join(' | ')
             });
 
             map.on('mousemove', 'states-fills', (e) => { mousemove(e, 'hoveredStateId', ["states"]) })
