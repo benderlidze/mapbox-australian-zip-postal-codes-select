@@ -11,11 +11,17 @@
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <!-- Load the `mapbox-gl-geocoder` plugin. -->
-    <script
+    <!-- <script
         src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.min.js"></script>
     <link rel="stylesheet"
         href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.css"
+        type="text/css"> -->
+
+    <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+    <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.0/mapbox-gl-draw.js"></script>
+    <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.0/mapbox-gl-draw.css"
         type="text/css">
+    <script src="js/mapbox-gl-draw-rectangle-mode.min.js"></script>
 
     <style>
         body {
@@ -53,6 +59,7 @@
             states: [],
             pins: [],
             selectedState: new Set("----"), //some empty value
+            disableMouseSelection: false,
         }
         const hoverStates = {
             hoveredStateId: null,
@@ -69,12 +76,55 @@
             projection: "mercator"
         });
 
+
+        const modes = MapboxDraw.modes;
+        modes.draw_polygon = DrawRectangle.default;
+        const draw = new MapboxDraw({
+            displayControlsDefault: false,
+            controls: {
+                polygon: true,
+                trash: false
+            },
+            // defaultMode: 'draw_polygon'
+        });
+        map.addControl(draw, 'top-right');
+        map.on('draw.modechange', function (feature) {
+            //if in draw mode disable mouse selection
+            setTimeout(() => {
+                mainData.disableMouseSelection = feature.mode === 'draw_polygon'
+            }, 100)//To prevent immediate click selection event map.on('click', 'states-fills'.....
+        })
+
+        map.on('draw.create', function (feature, event) {
+            const geometry = feature.features[0].geometry.coordinates[0]
+            draw.deleteAll()
+
+            //project 
+            const projected = geometry.map(d => {
+                const { x, y } = map.project(d)
+                return [x, y]
+            })
+
+            const bbox = [
+                [Math.min(...projected.map(d => d[0])), Math.min(...projected.map(d => d[1]))],
+                [Math.max(...projected.map(d => d[0])), Math.max(...projected.map(d => d[1]))]
+            ]
+
+            const features = map.queryRenderedFeatures(bbox, { layers: ['states-fills'] });
+            const codes = features.map(d => {
+                const id = d.properties['POA_CODE21']
+                id && mainData.selectedState.add(id)
+            })
+
+            mainData.selectedState
+            updateSelection()
+        });
+
         // Add the control to the map.
         // map.addControl(
         //     new MapboxGeocoder({
         //         accessToken: mapboxgl.accessToken,
         //         mapboxgl: mapboxgl,
-
         //     })
         // );
 
@@ -142,7 +192,7 @@
                 'type': 'circle',
                 'source': 'pins',
                 'paint': {
-                    'circle-radius': 5,
+                    'circle-radius': 0,
                     'circle-color': 'red'
                 }
             });
@@ -154,6 +204,9 @@
             });
 
             map.on('click', 'states-fills', (e) => {
+                if (mainData.disableMouseSelection) return;
+
+                console.log('CLICK!!!!!!!!!!!!!',);
 
                 const props = e.features[0].properties
                 const id = props['POA_CODE21']
@@ -161,9 +214,7 @@
                 console.log('props', props, id);
 
                 id && mainData.selectedState.has(id) ? mainData.selectedState.delete(id) : mainData.selectedState.add(id)
-                map.setPaintProperty('states-fills', 'fill-color',
-                    ['match', ['get', 'POA_NAME21'], [...mainData.selectedState], "red", "#000000"]
-                )
+                updateSelection()
 
                 //print selected pins 
                 const selectedPins = mainData.pins.filter(d => mainData.selectedState.has(d.properties.postcode))
@@ -174,6 +225,7 @@
             map.on('mouseleave', 'states-fills', (e) => { mouseleave('hoveredStateId', "states") })
 
             function mousemove(e, hoverID, source, popupFieldName = []) {
+                if (mainData.disableMouseSelection) return;
 
                 if (e.features.length > 0) {
                     if (hoverStates[hoverID] !== null) {
@@ -213,6 +265,12 @@
                 popup.remove();
             }
         });
+
+        function updateSelection() {
+            map.setPaintProperty('states-fills', 'fill-color',
+                ['match', ['get', 'POA_NAME21'], [...mainData.selectedState], "red", "#000000"]
+            )
+        }
 
 
     </script>
