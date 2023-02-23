@@ -47,14 +47,41 @@
             max-height: 200px;
             overflow: auto;
         }
+
+        .bubble {
+            height: 40px;
+            background: gray;
+            color: #fff;
+            position: absolute;
+            width: 186px;
+            text-align: center;
+            line-height: 40px;
+            z-index: 10;
+            right: 65px;
+            top: 6px;
+        }
+
+        .bubble:after {
+            content: "";
+            position: absolute;
+            height: 0;
+            width: 0;
+            left: 100%;
+            top: 0;
+            border: 20px solid transparent;
+            border-left: 20px solid gray;
+        }
     </style>
 </head>
 
 <body>
+    <div class="bubble" id="tootltip">Select by polygon</div>
     <div id="info"></div>
     <div id="map"></div>
     <script>
         const infoDiv = document.getElementById("info")
+        const tootltip = document.getElementById("tootltip")
+
         const mainData = {
             states: [],
             pins: [],
@@ -87,6 +114,7 @@
         });
         map.addControl(draw, 'top-right');
         map.on('draw.modechange', function (feature) {
+            tootltip.style.display = "none"
             //if in draw mode disable mouse selection
             setTimeout(() => {
                 mainData.disableMouseSelection = feature.mode === 'draw_polygon'
