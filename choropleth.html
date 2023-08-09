@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Add a polygon to a map using a GeoJSON source</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.11.0/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.11.0/mapbox-gl.js"></script>
+    <script src="https://d3js.org/topojson.v1.min.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <!-- Load the `mapbox-gl-geocoder` plugin. -->
+    <!-- <script
+        src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.min.js"></script>
+    <link rel="stylesheet"
+        href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.css"
+        type="text/css"> -->
+
+    <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+    <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.0/mapbox-gl-draw.js"></script>
+    <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.0/mapbox-gl-draw.css"
+        type="text/css">
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background-color: white;
+            padding: 10px;
+            z-index: 1;
+            max-width: 300px;
+            max-height: 200px;
+            overflow: auto;
+        }
+
+        .bubble {
+            height: 40px;
+            background: gray;
+            color: #fff;
+            position: absolute;
+            width: 186px;
+            text-align: center;
+            line-height: 40px;
+            z-index: 10;
+            right: 65px;
+            top: 6px;
+        }
+
+        .bubble:after {
+            content: "";
+            position: absolute;
+            height: 0;
+            width: 0;
+            left: 100%;
+            top: 0;
+            border: 20px solid transparent;
+            border-left: 20px solid gray;
+        }
+
+        #test {
+            position: absolute;
+            top: 20;
+            bottom: 10;
+
+            z-index: 100;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="test">
+        <button id="send-data">Send data</button>
+        <button id="get-data">Get data</button>
+    </div>
+
+    <div class="bubble" id="tootltip">Select by polygon</div>
+    <div id="info"></div>
+    <div id="map"></div>
+    <script>
+        const infoDiv = document.getElementById("info")
+        const tootltip = document.getElementById("tootltip")
+
+        const sendData = document.getElementById("send-data")
+        const getData = document.getElementById("get-data")
+
+        //function to generate a color based ion the number from 0 to 15 from light to darck blue 
+        const blueColors = d3.scaleSequential(d3.interpolateBlues).domain([0, 15])
+        // const redColors = d3.scaleSequential(d3.interpolateReds).domain([0, 15])
+
+        const startColor = d3.rgb(255, 150, 150);
+        const endColor = d3.rgb(255, 0, 0);
+
+        const redColors = d3.scaleLinear()
+            .domain([0, 15]) // Input values range from 0 to 15
+            .range([startColor, endColor]);
+
+
+
+        sendData.addEventListener("click", () => {
+            const data = JSON.stringify([...mainData.selectedState])
+            if (data.length === 0) return;
+
+            console.log(data)
+            //send data via POSt fetch 
+            fetch('http://localhost:3000/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: data
+            })
+        })
+
+        getData.addEventListener("click", () => {
+            const data = JSON.stringify([...mainData.selectedState])
+            if (data.length === 0) return;
+
+            console.log(data)
+            //send data via POSt fetch 
+            fetch('data/test.json')
+                .then(data => data.json())
+                .then(data => {
+                    const { states } = data
+                    console.log(states)
+                    if (states.length > 0) {
+
+                        states.forEach(item => mainData.selectedState.add(String(item)))
+
+                        updateSelection()
+                    }
+                })
+        })
+
+        const mainData = {
+            states: [],
+            pins: [],
+            selectedState: new Set([]), //some empty value
+            disableMouseSelection: false,
+        }
+        const hoverStates = {
+            hoveredStateId: null,
+            hoveredCountyId: null,
+            hoveredPrecinctId: null,
+        }
+
+        mapboxgl.accessToken = 'pk.eyJ1IjoiaG9tZXZpc2l0bmV0d29yayIsImEiOiJjbGVlYXZzN3owNWttNDRtdmxlYzB6cTRmIn0.cShmIUJUL59Bb5US4Lxmuw';
+        const map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/light-v11',
+            center: { lng: 134.97326237870135, lat: -28.280886234281198 },
+            zoom: 3.6,
+            projection: "mercator"
+        });
+
+        const draw = new MapboxDraw({
+            displayControlsDefault: false,
+            controls: {
+                polygon: true,
+                trash: false
+            },
+            // defaultMode: 'draw_polygon'
+        });
+        map.addControl(draw, 'top-right');
+
+        map.on('load', () => {
+            Promise.all([
+                fetch('data/POA_2021_AUST_GDA2020.topojson').then(d => d.json()),
+                d3.csv('data/australian_postcodes.csv'),
+                d3.csv('data/hvn-postcodes-2023-08-07-12-37-06.csv'),
+            ]).then(data => {
+
+                const choroplethData = new Map()
+                data[2].forEach(d => {
+                    choroplethData.set(d.Postcode, { ...d })
+                })
+
+                console.log('data', data);
+                const states = topojson.feature(data[0], data[0].objects['POA_2021_AUST_GDA2020'])
+                states.features.forEach((el, key) => {
+                    el.id = key
+                    el.properties.id = key
+
+                    const zip = el.properties['POA_CODE21']
+
+                    const members = choroplethData.get(zip)?.['Physiotherapy Members']
+                    const subscribers = choroplethData.get(zip)?.['Physiotherapy Subscribers']
+
+                    el.properties['Physiotherapy Members'] = +members
+                    el.properties['Physiotherapy Subscribers'] = +subscribers
+
+                    const membersColor = members ? blueColors(members) : 'white'
+                    const subscribersColor = subscribers ? redColors(subscribers) : 'white'
+
+                    el.properties.color = subscribers > 0 ? subscribersColor : membersColor
+
+                    console.log('', subscribers, members);
+
+                });
+                console.log('choroplethData', choroplethData);
+                console.log('states', states);
+                map.getSource('states').setData(states)
+                mainData.states.push(...states.features)
+
+                const pins = data[1].map(d => {
+                    return {
+                        type: 'Feature',
+                        geometry: {
+                            type: 'Point',
+                            coordinates: [+d.long, +d.lat]
+                        },
+                        properties: {
+                            ...d
+                        }
+                    }
+                })
+                map.getSource('pins').setData({ type: 'FeatureCollection', features: pins })
+                mainData.pins.push(...pins)
+            })
+
+            map.addSource('states', {
+                'type': 'geojson',
+                'data': { type: 'FeatureCollection', features: Array(0) }
+            });
+            map.addLayer({
+                'id': 'states-fills',
+                'type': 'fill',
+                'source': 'states',
+                'layout': {},
+                'paint': {
+                    'fill-color': ['get', 'color'],
+                    'fill-opacity': [
+                        'case',
+                        ['boolean', ['feature-state', 'hover'], false],
+                        0.2,
+                        1
+                    ]
+                }
+            });
+
+            //add pins layes 
+            map.addSource('pins', {
+                'type': 'geojson',
+                'data': { type: 'FeatureCollection', features: Array(0) }
+            });
+            map.addLayer({
+                'id': 'pins',
+                'type': 'circle',
+                'source': 'pins',
+                'paint': {
+                    'circle-radius': 0,
+                    'circle-color': 'red'
+                }
+            });
+
+            const popup = new mapboxgl.Popup({
+                closeButton: false,
+                closeOnClick: false,
+                offset: [0, -10]
+            });
+
+            map.on('click', 'states-fills', (e) => {
+                if (mainData.disableMouseSelection) return;
+
+                // console.log('CLICK!!!!!!!!!!!!!',);
+
+                // const props = e.features[0].properties
+                // const id = props['POA_CODE21']
+
+                // console.log('props', props, id);
+
+                // id && mainData.selectedState.has(id) ? mainData.selectedState.delete(id) : mainData.selectedState.add(id)
+                // updateSelection()
+
+                // //print selected pins 
+                // printSelectedPins()
+            });
+
+            map.on('mousemove', 'states-fills', (e) => { mousemove(e, 'hoveredStateId', ["states"]) })
+            map.on('mouseleave', 'states-fills', (e) => { mouseleave('hoveredStateId', "states") })
+
+            function mousemove(e, hoverID, source, popupFieldName = []) {
+                if (mainData.disableMouseSelection) return;
+
+                if (e.features.length > 0) {
+                    if (hoverStates[hoverID] !== null) {
+                        map.setFeatureState(
+                            { source: source, id: hoverStates[hoverID] },
+                            { hover: false }
+                        );
+                    }
+                    hoverStates[hoverID] = e.features[0].id;
+                    map.setFeatureState(
+                        { source: source, id: hoverStates[hoverID] },
+                        { hover: true }
+                    );
+                }
+                // Copy coordinates array.
+                const coordinates = e.features[0].geometry.coordinates.slice();
+                const props = e.features[0].properties;
+                //const def = popupFieldName ? props[popupFieldName] : props['NAME']
+                const def = props['POA_CODE21']
+                const text = `
+                    <div>
+                        <div>${def}</div>
+                        <div>Members: ${props['Physiotherapy Members']}</div>
+                        <div>Subscribers: ${props['Physiotherapy Subscribers']}</div>
+                    </div>
+                    `
+                popup.setLngLat(e.lngLat).setHTML(text).addTo(map);
+            }
+
+            function mouseleave(hoverID, source) {
+                if (hoverStates[hoverID] !== null) {
+                    map.setFeatureState(
+                        { source: source, id: hoverStates[hoverID] },
+                        { hover: false }
+                    );
+                }
+                hoverStates[hoverID] = null;
+                map.getCanvas().style.cursor = '';
+                popup.remove();
+            }
+
+            map.on('draw.modechange', function (feature) {
+                tootltip.style.display = "none"
+                //if in draw mode disable mouse selection
+                setTimeout(() => {
+                    mainData.disableMouseSelection = feature.mode === 'draw_polygon'
+                }, 100)//To prevent immediate click selection event map.on('click', 'states-fills'.....
+            })
+
+            map.on('draw.create', function (feature, event) {
+
+                const polygon = feature.features[0]
+                draw.deleteAll()
+
+                // const codes = geometry.map(d => {
+                //     const id = d.properties['POA_CODE21']
+                //     id && mainData.selectedState.add(id)
+                // })
+
+                //turf contains function
+                const selected = mainData.states.filter(d => {
+                    if (!d.geometry) return false
+                    if (turf.getType(d) === "MultiPolygon") {
+                        const coords = turf.coordAll(d)
+                        return coords.every(p => {
+                            const point = turf.point(p)
+                            return turf.booleanContains(polygon, point)
+                        })
+                    }
+                    return turf.booleanContains(polygon, d)
+                })
+
+                const codes = selected.map(d => {
+                    const id = d.properties['POA_CODE21']
+                    id && mainData.selectedState.add(id)
+                })
+
+                updateSelection()
+                printSelectedPins()
+            });
+        });
+
+        function printSelectedPins() {
+            //print selected pins 
+            const selectedPins = mainData.pins.filter(d => mainData.selectedState.has(d.properties.postcode))
+            infoDiv.innerHTML = selectedPins.map(d => `id:${d.properties.id},postcode:${d.properties.postcode} `).join(' | ')
+        }
+
+        function updateSelection() {
+            const states = mainData.selectedState.size > 0 ? mainData.selectedState : [""]
+            map.setPaintProperty('states-fills', 'fill-color',
+                ['match', ['get', 'POA_NAME21'], [...states], "red", "#000000"]
+            )
+        }
+
+
+    </script>
+
+</body>
+
+</html>
