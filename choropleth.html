@@ -83,12 +83,12 @@
 </head>
 
 <body>
-    <div id="test">
+    <!-- <div id="test">
         <button id="send-data">Send data</button>
         <button id="get-data">Get data</button>
-    </div>
+    </div> -->
 
-    <div class="bubble" id="tootltip">Select by polygon</div>
+    <!-- <div class="bubble" id="tootltip">Select by polygon</div> -->
     <div id="info"></div>
     <div id="map"></div>
     <script>
@@ -111,40 +111,40 @@
 
 
 
-        sendData.addEventListener("click", () => {
-            const data = JSON.stringify([...mainData.selectedState])
-            if (data.length === 0) return;
+        // sendData.addEventListener("click", () => {
+        //     const data = JSON.stringify([...mainData.selectedState])
+        //     if (data.length === 0) return;
 
-            console.log(data)
-            //send data via POSt fetch 
-            fetch('http://localhost:3000/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: data
-            })
-        })
+        //     console.log(data)
+        //     //send data via POSt fetch 
+        //     fetch('http://localhost:3000/', {
+        //         method: 'POST',
+        //         headers: {
+        //             'Content-Type': 'application/json'
+        //         },
+        //         body: data
+        //     })
+        // })
 
-        getData.addEventListener("click", () => {
-            const data = JSON.stringify([...mainData.selectedState])
-            if (data.length === 0) return;
+        // getData.addEventListener("click", () => {
+        //     const data = JSON.stringify([...mainData.selectedState])
+        //     if (data.length === 0) return;
 
-            console.log(data)
-            //send data via POSt fetch 
-            fetch('data/test.json')
-                .then(data => data.json())
-                .then(data => {
-                    const { states } = data
-                    console.log(states)
-                    if (states.length > 0) {
+        //     console.log(data)
+        //     //send data via POSt fetch 
+        //     fetch('data/test.json')
+        //         .then(data => data.json())
+        //         .then(data => {
+        //             const { states } = data
+        //             console.log(states)
+        //             if (states.length > 0) {
 
-                        states.forEach(item => mainData.selectedState.add(String(item)))
+        //                 states.forEach(item => mainData.selectedState.add(String(item)))
 
-                        updateSelection()
-                    }
-                })
-        })
+        //                 updateSelection()
+        //             }
+        //         })
+        // })
 
         const mainData = {
             states: [],
@@ -250,6 +250,19 @@
                         1
                     ]
                 }
+            },
+                ...map.getStyle().layers.filter(d => d.type === "symbol").map(d => d.id)
+            );
+            map.addLayer({
+                'id': 'states-borders',
+                'type': 'line',
+                'source': 'states',
+                'layout': {},
+                'paint': {
+                    'line-color': '#eee',
+                    'line-width': 0.5,
+                    'line-opacity': 0.5
+                }
             });
 
             //add pins layes 
@@ -317,10 +330,10 @@
                 const text = `
                     <div>
                         <div>${def}</div>
-                        <div>Members: ${props['Physiotherapy Members']}</div>
-                        <div>Subscribers: ${props['Physiotherapy Subscribers']}</div>
-                    </div>
-                    `
+                        </div>
+                        `
+                // <div>Members: ${props['Physiotherapy Members']}</div>
+                // <div>Subscribers: ${props['Physiotherapy Subscribers']}</div>
                 popup.setLngLat(e.lngLat).setHTML(text).addTo(map);
             }
 
