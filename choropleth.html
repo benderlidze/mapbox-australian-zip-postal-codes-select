@@ -83,18 +83,9 @@
 </head>
 
 <body>
-    <!-- <div id="test">
-        <button id="send-data">Send data</button>
-        <button id="get-data">Get data</button>
-    </div> -->
-
-    <!-- <div class="bubble" id="tootltip">Select by polygon</div> -->
-    <div id="info"></div>
     <div id="map"></div>
     <script>
-        const infoDiv = document.getElementById("info")
         const tootltip = document.getElementById("tootltip")
-
         const sendData = document.getElementById("send-data")
         const getData = document.getElementById("get-data")
 
@@ -108,43 +99,6 @@
         const redColors = d3.scaleLinear()
             .domain([0, 15]) // Input values range from 0 to 15
             .range([startColor, endColor]);
-
-
-
-        // sendData.addEventListener("click", () => {
-        //     const data = JSON.stringify([...mainData.selectedState])
-        //     if (data.length === 0) return;
-
-        //     console.log(data)
-        //     //send data via POSt fetch 
-        //     fetch('http://localhost:3000/', {
-        //         method: 'POST',
-        //         headers: {
-        //             'Content-Type': 'application/json'
-        //         },
-        //         body: data
-        //     })
-        // })
-
-        // getData.addEventListener("click", () => {
-        //     const data = JSON.stringify([...mainData.selectedState])
-        //     if (data.length === 0) return;
-
-        //     console.log(data)
-        //     //send data via POSt fetch 
-        //     fetch('data/test.json')
-        //         .then(data => data.json())
-        //         .then(data => {
-        //             const { states } = data
-        //             console.log(states)
-        //             if (states.length > 0) {
-
-        //                 states.forEach(item => mainData.selectedState.add(String(item)))
-
-        //                 updateSelection()
-        //             }
-        //         })
-        // })
 
         const mainData = {
             states: [],
@@ -167,15 +121,7 @@
             projection: "mercator"
         });
 
-        const draw = new MapboxDraw({
-            displayControlsDefault: false,
-            controls: {
-                polygon: true,
-                trash: false
-            },
-            // defaultMode: 'draw_polygon'
-        });
-        map.addControl(draw, 'top-right');
+        map.addControl(new mapboxgl.NavigationControl());
 
         map.on('load', () => {
             Promise.all([
@@ -189,7 +135,6 @@
                     choroplethData.set(d.Postcode, { ...d })
                 })
 
-                console.log('data', data);
                 const states = topojson.feature(data[0], data[0].objects['POA_2021_AUST_GDA2020'])
                 states.features.forEach((el, key) => {
                     el.id = key
@@ -207,12 +152,7 @@
                     const subscribersColor = subscribers ? redColors(subscribers) : 'white'
 
                     el.properties.color = subscribers > 0 ? subscribersColor : membersColor
-
-                    console.log('', subscribers, members);
-
                 });
-                console.log('choroplethData', choroplethData);
-                console.log('states', states);
                 map.getSource('states').setData(states)
                 mainData.states.push(...states.features)
 
@@ -349,60 +289,7 @@
                 popup.remove();
             }
 
-            map.on('draw.modechange', function (feature) {
-                tootltip.style.display = "none"
-                //if in draw mode disable mouse selection
-                setTimeout(() => {
-                    mainData.disableMouseSelection = feature.mode === 'draw_polygon'
-                }, 100)//To prevent immediate click selection event map.on('click', 'states-fills'.....
-            })
-
-            map.on('draw.create', function (feature, event) {
-
-                const polygon = feature.features[0]
-                draw.deleteAll()
-
-                // const codes = geometry.map(d => {
-                //     const id = d.properties['POA_CODE21']
-                //     id && mainData.selectedState.add(id)
-                // })
-
-                //turf contains function
-                const selected = mainData.states.filter(d => {
-                    if (!d.geometry) return false
-                    if (turf.getType(d) === "MultiPolygon") {
-                        const coords = turf.coordAll(d)
-                        return coords.every(p => {
-                            const point = turf.point(p)
-                            return turf.booleanContains(polygon, point)
-                        })
-                    }
-                    return turf.booleanContains(polygon, d)
-                })
-
-                const codes = selected.map(d => {
-                    const id = d.properties['POA_CODE21']
-                    id && mainData.selectedState.add(id)
-                })
-
-                updateSelection()
-                printSelectedPins()
-            });
         });
-
-        function printSelectedPins() {
-            //print selected pins 
-            const selectedPins = mainData.pins.filter(d => mainData.selectedState.has(d.properties.postcode))
-            infoDiv.innerHTML = selectedPins.map(d => `id:${d.properties.id},postcode:${d.properties.postcode} `).join(' | ')
-        }
-
-        function updateSelection() {
-            const states = mainData.selectedState.size > 0 ? mainData.selectedState : [""]
-            map.setPaintProperty('states-fills', 'fill-color',
-                ['match', ['get', 'POA_NAME21'], [...states], "red", "#000000"]
-            )
-        }
-
 
     </script>
 
